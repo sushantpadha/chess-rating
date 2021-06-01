@@ -364,3 +364,295 @@ class Game:
         print()
         print('Exiting ...')
         exit()
+
+
+class Option:
+    def __init__(self, name: str, text: str,
+                 action: Any,
+                 parent=None, help: str = ""):
+        self.name = name
+        self.text = text
+        self.action = action
+        self.parent = parent
+        self.help = help
+
+    def execute(self, *args, **kwargs):
+        print()
+        action = self.action
+        if action == 'print':
+            print(self.text)
+            print('?> ', end='')
+            self.show_help()
+            print()
+            input('[press enter]')
+            return
+        action()
+        print()
+        input('[press enter]')
+
+    def show_help(self):
+        print()
+        print('?help: ', end='')
+        print(self.help)
+        print()
+        input('[press enter]')
+
+    def __repr__(self):
+        return self.text
+
+    def __str__(self):
+        return self.__repr__()
+
+
+class Menu:
+    def __init__(self, game, options: List[Option] = []):
+        self.game = game
+        self.options = options
+        self.parent = None
+
+    def add_option(self, option: Option):
+        self.options.append(option)
+
+    def start(self, header: str = "interactive menu",
+              options: List[Option] = None, add_nav_opts: bool = True):
+        options = self.options if options is None else options
+        if add_nav_opts:
+            options = self.add_nav_options(options)
+        header = self.format_header(header)
+
+        ans = None
+        while ans is None:
+            self.clear_screen()
+            print(header)
+            print()
+            print()
+
+            for i, opt in enumerate(self.options):
+                s = f'{i + 1}: {opt.text}'
+                print(s)
+
+            print()
+            print('type the number `n` corressponding to the desired option')
+            print('    type `?n` to get help about the option numbered `n`')
+
+            print()
+            print()
+            print()
+
+            ans = input('YOUR ANSWER: ')
+            n = int(ans[-1])
+            opt = options[n - 1]
+            if ans[0] == '?':
+                opt.show_help()
+                ans = None
+            else:
+                opt.execute()
+                ans = None
+
+    def restart_func(self, *args, **kwargs):
+        # start menu again
+        self.start(*args, **kwargs)
+
+    def add_nav_options(self, options):
+        # add default help option, restart option, return option
+        help_opt = Option(
+            name='help', text='help for menu', action='print',
+            help='this is the menu for managing the game')
+        restart_opt = Option(name='restart', text='restart menu',
+                             action=self.restart_func,
+                             help='restart this menu')
+        exit_opt = Option(name='exit', text='exit menu (save/discard changes)',
+                          action=self.game.i_exit,
+                          help='exit menu with/without saving')
+
+        if options[-3].name != 'help':
+            options.append(help_opt)
+        if options[-2].name != 'restart':
+            options.append(restart_opt)
+        if options[-1].name != 'exit':
+            options.append(exit_opt)
+
+        return options
+
+    @staticmethod
+    def format_header(header: str):
+        header = header.replace(' ', '   ')  # make all spaces 3 times wider
+        # add space in front of every char (exc if it is space)
+        temp = []
+        for c in header:
+            if c == ' ':
+                temp.append(c)
+            else:
+                temp.append(c + ' ')
+        header = ''.join(temp)
+        header = header.upper()  # capitalize each char
+        header = "# " + header + "#"
+        # padding # on top and bottom
+        header = f"{'#'*len(header)}\n{header}\n{'#'*len(header)}\n"
+        return header
+
+    @staticmethod
+    def clear_screen():
+        print(chr(27) + "[2J")  # clear screen in most terminals
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+    )
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument('-n', '--new', dest='n',
+                       action='store_true', help='make a new game')
+    modes.add_argument('-o', '--open', dest='o',
+                       action='store_true', help='open an existing game')
+    parser.add_argument('dir', action='store', type=str,
+                        help='directory to store results in / ' +
+                        'retrieve results from')
+    parser.add_argument('-p', '--player-names', dest='player_names',
+                        action='store', type=str,
+                        help='single string of space seperated ' +
+                        'single-word player names for a new game')
+    parser.add_argument('-d', '--dont-save', dest='AUTOSAVE',
+                        action='store_false',
+                        help='turn off autosave. will require ' +
+                        'manually saving changes before exiting')
+    parser.add_argument('-r', '--repl', dest='repl',
+                        action='store_true',
+                        help='drop into REPL instead of interactive menu ' +
+                        '(for advanced users)')
+    return parser.parse_args()
+
+
+def new_game(player_names):
+    players = []
+    for s in player_names:
+        p = Player(name=s)
+        p.make_file()
+        players.append(p)
+
+    g = Game(players)
+
+    g.save()
+
+    return g
+
+
+def open_game(result_dir):
+    players = []
+    for file in os.listdir(result_dir):
+        # non .json files
+        if not file.endswith('.json'):
+            continue
+        # special files
+        if file in ('game.json', '_backup'):
+            continue
+        file = result_dir.joinpath(file)
+        name = Path(file).stem
+        with open(file, 'r') as f:
+            content = json.load(f)
+        p = Player(name=name, **content)
+        players.append(p)
+
+    game_file = result_dir.joinpath('game.json')
+    with open(game_file, 'r') as f:
+        content = json.load(f)
+
+    g = Game(players=players, **content)
+    g.make_backup()
+
+    return g
+
+
+def get_result_dir(result_dir=None):
+    if result_dir is None:
+        result_dir = input(
+            'Directory to store results in / retrive results from ' +
+            '(should have read-write permissions): '
+        )
+    try:
+        result_dir = Path(result_dir)
+    except:
+        print(f'`result_dir`: {result_dir} is invalid')
+        result_dir = None
+    if not result_dir.exists():
+        try:
+            os.makedirs(result_dir)
+        except:
+            print(f'`result_dir`: {result_dir} cant be created')
+            result_dir = None
+
+    if result_dir is None:
+        result_dir = get_result_dir(result_dir)
+
+    return result_dir
+
+
+def get_player_names(player_names=None):
+    if player_names is None:
+        player_names = input(
+            'Input single-word player names seperated by space:\n'
+        ).strip().split()
+    else:
+        player_names = player_names.strip().split()
+
+    return player_names
+
+
+def get_menu(g: Game) -> Menu:
+    options = [
+        Option(name='add_player', text='add player to game',
+               action=g.i_add_player,
+               help='add a player to the current game with a name and rating'),
+        Option(name='add_match', text='add match to update score',
+               action=g.i_add_match,
+               help='add match score to the ' +
+               'current game to update the scores of the players based on it'),
+        Option(name='display_info', text='display current scores',
+               action=g.i_display_info,
+               help='display the scores of all ' +
+               'players in a sorted, tabulated manner'),
+        Option(name='reset_scores', text='reset a player\'s scores',
+               action=g.i_reset_scores,
+               help='reset specific scores of a certain player')
+    ]
+
+    menu = Menu(game=g, options=options)
+
+    return menu
+
+
+def main(args=None):
+    global result_dir, AUTOSAVE
+
+    result_dir = args.get('dir')
+    player_names = args.get('player_names')
+    n = args.get('n')
+    o = args.get('o')
+    _autosave = args.get('AUTOSAVE')
+    repl = args.get('repl')
+
+    AUTOSAVE = _autosave
+
+    result_dir = get_result_dir(result_dir)
+    player_names = get_player_names(player_names) if n else player_names
+
+    if n:
+        g = new_game(player_names)
+    elif o:
+        g = open_game(result_dir)
+
+    menu = get_menu(g)
+
+    if not repl:
+        menu.start()
+    else:
+        banner = "Interactive REPL for chess_rating"
+        if REPL_MODE == "ipython":
+            enter_repl(banner=banner, local=locals())
+        elif REPL_MODE == "python":
+            enter_repl(banner=banner, local=locals())
+
+
+if __name__ == '__main__':
+    args = vars(parse_args())
+    main(args)
