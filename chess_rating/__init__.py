@@ -621,8 +621,10 @@ def get_menu(g: Game) -> Menu:
     return menu
 
 
-def main(args=None):
+def main():
     global result_dir, AUTOSAVE
+
+    args = vars(parse_args())
 
     result_dir = args.get('dir')
     player_names = args.get('player_names')
@@ -654,5 +656,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    args = vars(parse_args())
-    main(args)
+    main()
