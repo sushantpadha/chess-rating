@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "chess-rating"
+version = "0.1.0"
+description = "tool to store and modify ELO chess ratings"
+authors = ["sushantpadha <24b1057@iitb.ac.in>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+prettytable = "^2.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^6.2.1"
+pycodestyle = "^2.6.0"
+autopep8 = "^1.5.4"
+
+[tool.poetry.scripts]
+chess_rating = "chess_rating.__main__:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
